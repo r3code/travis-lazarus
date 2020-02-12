@@ -7,7 +7,12 @@ Travis CI integration for FPC / Lazarus
 
 Files
 -----
-`./.travis.install.py` Sets up the environment by downloading and installing the proper FreePascal and Lazarus versions. Run this script in Travis' `install` phase.
+`./.travis.install.py` Sets up the environment by downloading and installing the proper FreePascal and Lazarus versions. Run this script in Travis' `install` phase. If you build fails with `Permission denied` then try to mark `./.travis.install.py` at git by command `git update-index --add --chmod=+x .travis.install.py`, commit and push. Or try to set executable permission, add to `./.travis.yml` in `before_install` section:
+```yaml
+   before_install:
+     - chmod +x build.sh
+     ...
+```
 
 `./.travis.yml` Custom Travis setup. Refer to their [documentation](http://docs.travis-ci.com/user/customizing-the-build/) for more information.
 
