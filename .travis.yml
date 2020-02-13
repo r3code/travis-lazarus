@@ -4,6 +4,9 @@
 language: generic
 sudo: required
 dist: bionic
+services:
+  # add virtual display to test GUI (only for dist `bionic`)
+  - xvfb
 
 os:
   - linux
@@ -11,32 +14,26 @@ os:
 
 env:
   global:
-    - WINEPREFIX=~/.winelaz
-    - DISPLAY=:99.0
+    - WINEPREFIX=~/.winelaz    
+# DISABLED for service xvfb    - DISPLAY=:99.0
+# see also xvfb-run -a - auto select free first DISPLAY
   matrix:
     - LAZ_PKG=true  # Use the latest version from the default package manager
-    - LAZ_VER=1.4.4 # Use specific (binary) release
-    - LAZ_VER=1.8.2
+    - LAZ_VER=2.0.6 # Use specific (binary) release   
 
 matrix:
   include:
     - os: linux
-      env: LAZ_VER=1.4.4  LAZ_ENV=wine WINEARCH=win32 LAZ_OPT="--os=win32 --cpu=i386"
+      env: LAZ_VER=2.0.6 LAZ_ENV=wine WINEARCH=win32 LAZ_OPT="--os=win32 --cpu=i386"    
     - os: linux
-      env: LAZ_VER=1.8.2 LAZ_ENV=wine WINEARCH=win32 LAZ_OPT="--os=win32 --cpu=i386"
+      env: LAZ_VER=2.0.6 LAZ_ENV=wine WINEARCH=win64 LAZ_OPT="--os=win64 --cpu=x86_64"    
     - os: linux
-      env: LAZ_VER=1.4.4  LAZ_ENV=wine WINEARCH=win64 LAZ_OPT="--os=win64 --cpu=x86_64"
-    - os: linux
-      env: LAZ_VER=1.8.2 LAZ_ENV=wine WINEARCH=win64 LAZ_OPT="--os=win64 --cpu=x86_64"
-    - os: linux
-      env: LAZ_VER=1.4.4  LAZ_ENV=qemu-arm LAZ_OPT="--os=linux --cpu=arm"
-    - os: linux
-      env: LAZ_VER=1.8.2 LAZ_ENV=qemu-arm LAZ_OPT="--os=linux --cpu=arm"
+      env: LAZ_VER=2.0.6 LAZ_ENV=qemu-arm LAZ_OPT="--os=linux --cpu=arm"    
 
 before_install:
-  # Start virtual display server
-  - Xvfb $DISPLAY &
-
+  # set executable permission 
+  - chmod +x ./.travis.install.py
+  
 install:
   # Install prerequisites (fpc/lazarus/wine/qemu)
   - ./.travis.install.py
