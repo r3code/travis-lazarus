@@ -1,7 +1,7 @@
 # Part of `travis-lazarus` (https://github.com/nielsAD/travis-lazarus)
 # License: MIT
 
-language: generic
+language: shell
 sudo: required
 dist: bionic
 services:
@@ -10,7 +10,8 @@ services:
 
 os:
   - linux
-  - osx
+  - osx 
+  - windows
 
 env:
   global:
@@ -19,24 +20,38 @@ env:
 # see also xvfb-run -a - auto select free first DISPLAY
   matrix:
     - LAZ_PKG=true  # Use the latest version from the default package manager
-    - LAZ_VER=2.0.6 # Use specific (binary) release   
+    - LAZ_VER=2.0.6 # Use specific (binary) release from SourceForce  
 
 matrix:
-  include:
-    - os: linux
-      env: LAZ_VER=2.0.6 LAZ_ENV=wine WINEARCH=win32 LAZ_OPT="--os=win32 --cpu=i386"    
-    - os: linux
-      env: LAZ_VER=2.0.6 LAZ_ENV=wine WINEARCH=win64 LAZ_OPT="--os=win64 --cpu=x86_64"    
+  include:        
+    # Windows Builds 
+    ## Lazarus 32-bit Windows 32-bit
+    - os: windows
+      env: LAZ_VER=2.0.6 LAZ_REL=32 LAZ_OPT="--os=win32 --cpu=i386"
+    ## Lazarus 64-bit Windows 64-bit   
+    - os: windows
+      env: LAZ_VER=2.0.6 LAZ_REL=64 LAZ_OPT="--os=win64 --cpu=x86_64"
+    # Linux Wine Builds
+    #- os: linux
+    #  env: LAZ_VER=2.0.6 LAZ_ENV=wine WINEARCH=win32 LAZ_OPT="--os=win32 --cpu=i386"    
+    #- os: linux
+    #  env: LAZ_VER=2.0.6 LAZ_ENV=wine WINEARCH=win64 LAZ_OPT="--os=win64 --cpu=x86_64"
+    # Pure Linux Builds    
     - os: linux
       env: LAZ_VER=2.0.6 LAZ_ENV=qemu-arm LAZ_OPT="--os=linux --cpu=arm"    
 
 before_install:
   # set executable permission 
-  - chmod +x ./.travis.install.py
+  - chmod +x ./.travis.install.py 
+  # Windows dependencies install 
+  - if [[ "$TRAVIS_OS_NAME" == "windows" ]]; then choco install python3 --params "/InstallDir:C:\python3"; fi
+  # Windows add tools to system ENV
+  - if [[ "$TRAVIS_OS_NAME" == "windows" ]]; then export PATH=/c/Python3:/c/Python3/Scripts:/c/lazarus:$PATH; fi
   
 install:
   # Install prerequisites (fpc/lazarus/wine/qemu)
-  - ./.travis.install.py
+  - if [[ "$TRAVIS_OS_NAME" == "windows" ]]; then python ./.travis.install.py; fi
+  - if [[ "$TRAVIS_OS_NAME" != "windows" ]]; then ./.travis.install.py; fi
 
 script:
   - lazbuild $LAZ_OPT my_lazarus_tests.lpi               # Build my_lazarus_test project

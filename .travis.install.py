@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # Part of `travis-lazarus` (https://github.com/nielsAD/travis-lazarus)
 # License: MIT
 
@@ -7,23 +7,25 @@ import os
 import subprocess
 
 OS_NAME=os.environ.get('TRAVIS_OS_NAME') or 'linux'
-OS_PMAN={'linux': 'sudo apt-get', 'osx': 'brew'}[OS_NAME]
+OS_PMAN={'linux': 'sudo apt-get', 'osx': 'brew', 'windows':'choco'}[OS_NAME]
 
 LAZ_TMP_DIR=os.environ.get('LAZ_TMP_DIR') or 'lazarus_tmp'
-LAZ_REL_DEF=os.environ.get('LAZ_REL_DEF') or {'linux':'amd64', 'qemu-arm':'amd64', 'qemu-arm-static':'amd64', 'osx':'i386', 'wine':'32'}
+LAZ_REL_DEF=os.environ.get('LAZ_REL_DEF') or {'linux':'amd64', 'qemu-arm':'amd64', 'qemu-arm-static':'amd64', 'osx':'i386', 'wine':'32', 'windows':'64'}
 LAZ_BIN_SRC=os.environ.get('LAZ_BIN_SRC') or 'https://sourceforge.net/projects/lazarus/files/%(target)s/Lazarus%%20%(version)s/'
 LAZ_BIN_TGT=os.environ.get('LAZ_BIN_TGT') or {
     'linux':           'Lazarus%%20Linux%%20%(release)s%%20DEB',
     'qemu-arm':        'Lazarus%%20Linux%%20%(release)s%%20DEB',
     'qemu-arm-static': 'Lazarus%%20Linux%%20%(release)s%%20DEB',
     'osx':             'Lazarus%%20Mac%%20OS%%20X%%20%(release)s',
-    'wine':            'Lazarus%%20Windows%%20%(release)s%%20bits'
+    'wine':            'Lazarus%%20Windows%%20%(release)s%%20bits',
+    'windows':         'Lazarus%%20Windows%%20%(release)s%%20bits'
 }
+DOWNLOAD_SCRIPT='download_script.sh'
 
 def install_osx_dmg(dmg):
     try:
         # Mount .dmg file and parse (automatically determined) target volumes
-        res = subprocess.check_output('sudo hdiutil attach %s | grep /Volumes/' % (dmg), shell=True)
+        res = str(subprocess.check_output('sudo hdiutil attach %s | grep /Volumes/' % (dmg), shell=True), "utf-8")
         vol = ('/Volumes/' + l.strip().split('/Volumes/')[-1] for l in res.splitlines() if '/Volumes/' in l)
     except:
         return False
@@ -58,27 +60,33 @@ def install_lazarus_version(ver,rel,env):
     osn = env or OS_NAME
     tgt = LAZ_BIN_TGT[osn] % {'release': rel or LAZ_REL_DEF[osn]}
     src = LAZ_BIN_SRC % {'target': tgt, 'version': ver}
-    if os.system('echo wget -w 1 -np -m -A download %s' % (src)) != 0:
+
+    # Create sourceforge download script
+    f = open(DOWNLOAD_SCRIPT, "w")
+    f.write('wget -w 1 -np -m -A download %s\n' % (src))
+    f.write('grep -Rh refresh sourceforge.net/ | grep -o "https://[^\\?]*" > urllist\n')
+    f.write('while read url; do wget --content-disposition "${url}" -A .deb,.dmg,.exe -P %s; done < urllist\n' % (LAZ_TMP_DIR))
+    f.close()
+
+    # Show download script for debug purpose
+    os.system('cat %s' % (DOWNLOAD_SCRIPT))
+
+    # Run the download script
+    if os.system('chmod +x %s' % (DOWNLOAD_SCRIPT)) != 0:
         return False
 
-    if os.system('wget -w 1 -np -m -A download %s' % (src)) != 0:
-        return False
-
-    if os.system('grep -Rh refresh sourceforge.net/ | grep -o "https://[^\\?]*" > urllist') != 0:
-        return False
-
-    if os.system('while read url; do wget --content-disposition "${url}"  -A .deb,.dmg,.exe -P %s; done < urllist'  % (LAZ_TMP_DIR)) != 0:
+    if os.system('sh ./%s' % (DOWNLOAD_SCRIPT)) != 0:
         return False
 
     if osn == 'wine':
-        PKG_WINE={'bionic': 'wine32 wine-stable'}.get(os.environ.get('TRAVIS_DIST'), 'wine')
-
+        #FIXME(bionic): PKG_WINE={'bionic': 'wine32 wine-stable'}.get(os.environ.get('TRAVIS_DIST'), 'wine')
         # Install wine and Xvfb
-        if os.system('sudo dpkg --add-architecture i386 && %s update && %s install xvfb %s' % (OS_PMAN, OS_PMAN, PKG_WINE)) != 0:
+        if os.system('sudo dpkg --add-architecture i386 && %s update && %s install xvfb wine' % (OS_PMAN, OS_PMAN)) != 0:
             return False
 
         # Initialize virtual display and wine directory
-        if os.system('Xvfb %s & sleep 3 && (wineboot -i || wineboot-stable -i)' % (os.environ.get('DISPLAY') or '')) != 0:
+		#FIXME(bionic): if os.system('Xvfb %s & sleep 3 && (wineboot -i || wineboot-stable -i)' % (os.environ.get('DISPLAY') or '')) != 0:
+        if os.system('Xvfb %s & sleep 3 && wineboot -i' % (os.environ.get('DISPLAY') or '')) != 0:
             return False
 
         # Install basic Wine prerequisites, ignore failure
@@ -88,7 +96,8 @@ def install_lazarus_version(ver,rel,env):
         process_file = lambda f: (not f.endswith('.exe')) or os.system('wine %s /VERYSILENT /DIR="c:\\lazarus"' % (f)) == 0
     elif osn == 'qemu-arm' or osn == 'qemu-arm-static':
         # Install qemu and arm cross compiling utilities
-        if os.system('%s install libgtk2.0-dev qemu-user qemu-user-static binutils-arm-linux-gnueabi gcc-arm-linux-gnueabi libc-dev-armel-cross' % (OS_PMAN)) != 0:
+        #FIXME(bionic): if os.system('%s install libgtk2.0-dev qemu-user qemu-user-static binutils-arm-linux-gnueabi gcc-arm-linux-gnueabi libc-dev-armel-cross' % (OS_PMAN)) != 0:
+        if os.system('%s install libgtk2.0-dev qemu-user qemu-user-static binutils-arm-linux-gnueabi gcc-arm-linux-gnueabi' % (OS_PMAN)) != 0:
             return False
 
         # Install all .deb files (for linux) and cross compile later
@@ -103,6 +112,9 @@ def install_lazarus_version(ver,rel,env):
     elif osn == 'osx':
         # Install all .dmg files
         process_file = lambda f: (not f.endswith('.dmg')) or install_osx_dmg(f)
+    elif osn == 'windows':
+        # Install lazarus .exe files
+        process_file = lambda f: (not f.endswith('.exe')) or os.system('%s /VERYSILENT /DIR="c:\\lazarus"' % (f)) == 0
     else:
         return False
 
@@ -118,12 +130,12 @@ def install_lazarus_version(ver,rel,env):
         # Redirect listed executables so they execute in wine
         for alias in ('fpc', 'lazbuild', 'lazarus'):
             os.system('echo "#!/usr/bin/env bash \nwine %(target)s \$@" | sudo tee %(name)s > /dev/null && sudo chmod +x %(name)s' % {
-                'target': subprocess.check_output("find $WINEPREFIX -iname '%s.exe' | head -1 " % (alias), shell=True).strip(),
+                'target': str(subprocess.check_output("find $WINEPREFIX -iname '%s.exe' | head -1 " % (alias), shell=True).strip(), "utf-8"),
                 'name': '/usr/bin/%s' % (alias)
             })
     elif osn == 'qemu-arm' or osn == 'qemu-arm-static':
-        fpcv = subprocess.check_output('fpc -iV', shell=True).strip()
-        gccv = subprocess.check_output('arm-linux-gnueabi-gcc -dumpversion', shell=True).strip()
+        fpcv = str(subprocess.check_output('fpc -iV', shell=True).strip(), "utf-8")
+        gccv = str(subprocess.check_output('arm-linux-gnueabi-gcc -dumpversion', shell=True).strip(), "utf-8")
         opts = ' '.join([
             'CPU_TARGET=arm',
             'OS_TARGET=linux',
